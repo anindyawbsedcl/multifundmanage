@@ -17,8 +17,15 @@ export const metadata: Metadata = {
   title: "MultiFundManage — Multi-Event Fund Management",
   description:
     "Manage multiple event funds — Puja, Picnic, Wedding & more. Track donations, expenses, people with professional reports.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "MultiFund",
+  },
   icons: {
-    icon: "/favicon.ico",
+    icon: "/icons/icon-192x192.png",
+    apple: "/icons/apple-touch-icon.png",
   },
 };
 
@@ -29,6 +36,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
+      <head>
+        <meta name="theme-color" content="#6366f1" />
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+      </head>
       <body className="min-h-full flex flex-col bg-background text-foreground relative">
         <ThemeProvider>
           {children}

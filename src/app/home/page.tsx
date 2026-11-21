@@ -7,6 +7,7 @@ import { formatCurrency, formatDate, cn } from '@/lib/utils';
 import { generateFundId } from '@/lib/id-generator';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { FundWithStats, EventType } from '@/lib/types';
+import { PwaInstallButton } from '@/components/shared/pwa-install';
 import {
   Plus,
   Trash2,
@@ -30,6 +31,8 @@ import {
   Loader2,
   LayoutGrid,
   List,
+  Menu,
+  Smartphone,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -61,6 +64,7 @@ export default function HomePage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [layoutView, setLayoutView] = useState<'grid' | 'list'>('grid');
   const [user, setUser] = useState<{ email: string; id: string } | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const supabase = createClient();
 
   useEffect(() => {
@@ -221,22 +225,67 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <ThemeToggle />
-            <Link
-              href="/settings"
-              className="rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-            >
-              <Settings className="h-5 w-5" />
-            </Link>
-            <button
-              onClick={handleLogout}
-              className="rounded-lg p-2 text-muted-foreground hover:bg-red-50 hover:text-red-600 transition-colors dark:hover:bg-red-900/20"
-            >
-              <LogOut className="h-5 w-5" />
-            </button>
+          <div className="flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-2">
+              <PwaInstallButton className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm" />
+              <ThemeToggle />
+              <Link
+                href="/settings"
+                className="rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                title="Account Settings"
+              >
+                <Settings className="h-5 w-5" />
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="rounded-lg p-2 text-muted-foreground hover:bg-red-50 hover:text-red-600 transition-colors dark:hover:bg-red-900/20"
+                title="Sign Out"
+              >
+                <LogOut className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Mobile Hamburger */}
+            <div className="sm:hidden flex items-center gap-1">
+              <ThemeToggle />
+              <button
+                onClick={() => setMenuOpen(!menuOpen)}
+                className="rounded-xl border border-border bg-secondary p-2 text-foreground"
+              >
+                {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Mobile Dropdown Menu */}
+        <AnimatePresence>
+          {menuOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="sm:hidden border-t border-border px-4 py-3 bg-card space-y-3"
+            >
+              <PwaInstallButton />
+              <div className="grid grid-cols-2 gap-2">
+                <Link
+                  href="/settings"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-border bg-secondary/50 py-2.5 text-xs font-semibold text-foreground"
+                >
+                  <Settings className="h-4 w-4" /> Account
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center justify-center gap-2 rounded-xl bg-red-50 py-2.5 text-xs font-semibold text-red-600 dark:bg-red-900/20 dark:text-red-400"
+                >
+                  <LogOut className="h-4 w-4" /> Sign Out
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
