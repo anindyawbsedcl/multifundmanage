@@ -143,6 +143,10 @@ on public.expenses for all using (
 create policy "Users can manage share links"
 on public.share_links for all using (auth.uid() = created_by);
 
+-- Allow public viewers to look up valid share tokens
+create policy "Allow public read on share_links"
+on public.share_links for select using (true);
+
 -- Public / Viewer Policy for Shared Links (Read-only for anyone with valid share token)
 create policy "Allow public viewer read via valid share token on funds"
 on public.funds for select using (

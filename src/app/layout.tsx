@@ -29,8 +29,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col bg-background text-foreground">
-        <ThemeProvider>{children}</ThemeProvider>
+      <body className="min-h-full flex flex-col bg-background text-foreground relative">
+        <ThemeProvider>
+          {children}
+          <div className="fixed bottom-3 right-4 z-40 pointer-events-none select-none print:hidden">
+            <div className="flex items-center gap-1.5 rounded-full border border-border/60 bg-card/80 px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur-md">
+              <span>Made with</span>
+              <span className="text-red-500 animate-pulse text-xs">❤️</span>
+              <span>by</span>
+              <span className="font-bold tracking-widest text-foreground">A N I N D Y A</span>
+            </div>
+          </div>
+        </ThemeProvider>
       </body>
     </html>
   );
