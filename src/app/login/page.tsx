@@ -15,7 +15,7 @@ import {
   Loader2,
 } from 'lucide-react';
 
-type LoginMode = 'password' | 'otp';
+type LoginMode = 'password' | 'otp' | 'signup';
 type OtpStep = 'email' | 'verify';
 
 export default function LoginPage() {
@@ -46,6 +46,28 @@ export default function LoginPage() {
       setLoading(false);
     } else {
       window.location.href = '/home';
+    }
+  }
+
+  async function handleSignUp(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+    } else if (data.session) {
+      window.location.href = '/home';
+    } else {
+      setSuccess('Account created! If email confirmation is enabled, check your inbox, or sign in now.');
+      setMode('password');
+      setLoading(false);
     }
   }
 
@@ -128,14 +150,14 @@ export default function LoginPage() {
                 setSuccess('');
               }}
               className={cn(
-                'flex-1 rounded-lg py-2.5 text-sm font-medium transition-all duration-200',
+                'flex-1 rounded-lg py-2.5 text-xs sm:text-sm font-medium transition-all duration-200',
                 mode === 'password'
                   ? 'bg-white text-indigo-600 shadow-sm dark:bg-gray-600 dark:text-indigo-400'
                   : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
               )}
             >
-              <Lock className="mr-1.5 inline h-4 w-4" />
-              Password
+              <Lock className="mr-1 inline h-3.5 w-3.5" />
+              Sign In
             </button>
             <button
               onClick={() => {
@@ -145,14 +167,29 @@ export default function LoginPage() {
                 setSuccess('');
               }}
               className={cn(
-                'flex-1 rounded-lg py-2.5 text-sm font-medium transition-all duration-200',
+                'flex-1 rounded-lg py-2.5 text-xs sm:text-sm font-medium transition-all duration-200',
                 mode === 'otp'
                   ? 'bg-white text-indigo-600 shadow-sm dark:bg-gray-600 dark:text-indigo-400'
                   : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
               )}
             >
-              <KeyRound className="mr-1.5 inline h-4 w-4" />
+              <KeyRound className="mr-1 inline h-3.5 w-3.5" />
               Email OTP
+            </button>
+            <button
+              onClick={() => {
+                setMode('signup');
+                setError('');
+                setSuccess('');
+              }}
+              className={cn(
+                'flex-1 rounded-lg py-2.5 text-xs sm:text-sm font-medium transition-all duration-200',
+                mode === 'signup'
+                  ? 'bg-white text-indigo-600 shadow-sm dark:bg-gray-600 dark:text-indigo-400'
+                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+              )}
+            >
+              Register
             </button>
           </div>
 
@@ -176,13 +213,13 @@ export default function LoginPage() {
             </motion.div>
           )}
 
-          {/* Password Login Form */}
-          {mode === 'password' && (
+          {/* Password Login / Sign Up Form */}
+          {(mode === 'password' || mode === 'signup') && (
             <motion.form
-              key="password-form"
+              key={mode}
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
-              onSubmit={handlePasswordLogin}
+              onSubmit={mode === 'password' ? handlePasswordLogin : handleSignUp}
               className="space-y-4"
             >
               <div>
@@ -214,6 +251,7 @@ export default function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
                     required
+                    minLength={6}
                     className="w-full rounded-xl border border-gray-200 bg-gray-50 py-3 pl-11 pr-11 text-sm transition-colors focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:focus:border-indigo-400 dark:focus:bg-gray-600"
                   />
                   <button
@@ -237,9 +275,13 @@ export default function LoginPage() {
               >
                 {loading ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
+                ) : mode === 'password' ? (
                   <>
                     Sign In <ArrowRight className="h-4 w-4" />
+                  </>
+                ) : (
+                  <>
+                    Create Admin Account <ArrowRight className="h-4 w-4" />
                   </>
                 )}
               </button>
