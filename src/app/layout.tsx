@@ -38,6 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span className="text-red-500 animate-pulse text-xs">❤️</span>
               <span>by</span>
               <span className="font-bold tracking-widest text-foreground">A N I N D Y A</span>
+              <span className="ml-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">v1.0</span>
             </div>
           </div>
         </ThemeProvider>
