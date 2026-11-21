@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/shared/theme-provider";
+import { PwaRegistrar } from "@/components/shared/pwa-registrar";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -43,6 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground relative">
         <ThemeProvider>
+          <PwaRegistrar />
           {children}
           <div className="fixed bottom-3 right-4 z-40 pointer-events-none select-none print:hidden">
             <div className="flex items-center gap-1.5 rounded-full border border-border/60 bg-card/80 px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur-md">
@@ -50,7 +52,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span className="text-red-500 animate-pulse text-xs">❤️</span>
               <span>by</span>
               <span className="font-bold tracking-widest text-foreground">A N I N D Y A</span>
-              <span className="ml-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">v1.0</span>
+              <span className="ml-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">v1.2</span>
             </div>
           </div>
         </ThemeProvider>

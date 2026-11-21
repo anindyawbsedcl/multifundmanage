@@ -5,10 +5,24 @@ import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
+import { toPng } from 'html-to-image';
 import {
-  FileText, Download, Image as ImageIcon, Printer,
-  Loader2, CheckCircle2, Calendar, Filter, Users, Gift, Receipt, PieChart
+  FileText,
+  Download,
+  Image as ImageIcon,
+  Printer,
+  Loader2,
+  FileSpreadsheet,
+  CheckCircle2,
+  Calendar,
+  Filter,
+  Users,
+  Gift,
+  Receipt,
+  PieChart,
+  Share2,
 } from 'lucide-react';
 import type { Fund, Donation, Expense, Person, Category } from '@/lib/types';
 
@@ -32,6 +46,7 @@ export default function ReportsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [exportType, setExportType] = useState<string | null>(null);
 
   // Filters
   const [selectedReport, setSelectedReport] = useState<ReportType>('full_summary');
@@ -48,9 +63,21 @@ export default function ReportsPage() {
     setLoading(true);
     const [fRes, dRes, eRes, pRes, cRes] = await Promise.all([
       supabase.from('funds').select('*').eq('id', fundId).single(),
-      supabase.from('donations').select('*').eq('fund_id', fundId).order('date', { ascending: true }),
-      supabase.from('expenses').select('*').eq('fund_id', fundId).order('date', { ascending: true }),
-      supabase.from('people').select('*').eq('fund_id', fundId).order('name', { ascending: true }),
+      supabase
+        .from('donations')
+        .select('*')
+        .eq('fund_id', fundId)
+        .order('date', { ascending: true }),
+      supabase
+        .from('expenses')
+        .select('*')
+        .eq('fund_id', fundId)
+        .order('date', { ascending: true }),
+      supabase
+        .from('people')
+        .select('*')
+        .eq('fund_id', fundId)
+        .order('name', { ascending: true }),
       supabase.from('categories').select('*').eq('fund_id', fundId),
     ]);
 
@@ -80,77 +107,396 @@ export default function ReportsPage() {
   const netBalance = totalDonations - totalExpenses;
 
   // Category breakdown
-  const categorySummary = categories.map((cat) => {
-    const sum = filteredExpenses
-      .filter((e) => e.category_id === cat.id || e.category_name === cat.name)
-      .reduce((s, e) => s + (e.amount || 0), 0);
-    return { name: cat.name, amount: sum };
-  }).filter((c) => c.amount > 0);
+  const categorySummary = categories
+    .map((cat) => {
+      const sum = filteredExpenses
+        .filter((e) => e.category_id === cat.id || e.category_name === cat.name)
+        .reduce((s, e) => s + (e.amount || 0), 0);
+      return { name: cat.name, amount: sum };
+    })
+    .filter((c) => c.amount > 0);
 
-  // Download PDF
+  // Download PDF (Vector-based via jsPDF & jspdf-autotable - no html2canvas crash)
   async function downloadPDF() {
-    if (!printRef.current) return;
     setExporting(true);
+    setExportType('pdf');
     try {
-      const element = printRef.current;
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-      });
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
+      const doc = new jsPDF({
         orientation: 'portrait',
-        unit: 'mm',
+        unit: 'pt',
         format: 'a4',
       });
 
-      const imgWidth = 210;
-      const pageHeight = 295;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = 0;
+      const pageWidth = doc.internal.pageSize.getWidth();
 
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
+      // Top banner
+      doc.setFillColor(79, 70, 229); // #4f46e5 Indigo 600
+      doc.rect(0, 0, pageWidth, 45, 'F');
 
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(15);
+      doc.setTextColor(255, 255, 255);
+      doc.text('MultiFundManage — Official Statement', 36, 28);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(224, 231, 255);
+      doc.text('v1.2 · Financial Ledger', pageWidth - 36, 28, { align: 'right' });
+
+      // Title & Fund Details
+      doc.setTextColor(15, 23, 42); // slate-900
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(20);
+      doc.text(fund?.name || 'Event Fund', 36, 75);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139); // slate-500
+      const eventDetails = `Event: ${(fund?.event_type || 'Event').toUpperCase()}  |  Fund ID: ${fund?.fund_id || 'N/A'}`;
+      doc.text(eventDetails, 36, 92);
+
+      const reportNameStr = selectedReport.replace(/_/g, ' ').toUpperCase();
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(79, 70, 229);
+      doc.text(`REPORT: ${reportNameStr}`, pageWidth - 36, 75, { align: 'right' });
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139);
+      const datePeriod =
+        startDate || endDate
+          ? `Period: ${startDate || 'Start'} to ${endDate || 'Now'}`
+          : `Generated: ${new Date().toLocaleDateString()}`;
+      doc.text(datePeriod, pageWidth - 36, 92, { align: 'right' });
+
+      // Financial Metrics Summary Box
+      doc.setDrawColor(226, 232, 240); // slate-200
+      doc.setFillColor(248, 250, 252); // slate-50
+      doc.roundedRect(36, 108, pageWidth - 72, 54, 6, 6, 'FD');
+
+      const colWidth = (pageWidth - 72) / 3;
+
+      // Col 1: Total Collections
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text('TOTAL COLLECTIONS', 48, 126);
+      doc.setFontSize(13);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(16, 185, 129); // emerald-600
+      doc.text(formatCurrency(totalDonations), 48, 146);
+
+      // Col 2: Total Expenses
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 116, 139);
+      doc.text('TOTAL EXPENSES', 48 + colWidth, 126);
+      doc.setFontSize(13);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(225, 29, 72); // rose-600
+      doc.text(formatCurrency(totalExpenses), 48 + colWidth, 146);
+
+      // Col 3: Net Balance
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 116, 139);
+      doc.text('CLOSING BALANCE', 48 + colWidth * 2, 126);
+      doc.setFontSize(13);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(
+        netBalance >= 0 ? 79 : 225,
+        netBalance >= 0 ? 70 : 29,
+        netBalance >= 0 ? 229 : 72
+      );
+      doc.text(formatCurrency(netBalance), 48 + colWidth * 2, 146);
+
+      const startY = 180;
+
+      // Report Tables
+      if (selectedReport === 'full_summary' || selectedReport === 'balance_sheet') {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(30, 41, 59);
+        doc.text('Category-wise Expense Breakdown', 36, startY);
+
+        autoTable(doc, {
+          startY: startY + 8,
+          margin: { left: 36, right: 36 },
+          head: [['Category', 'Amount', '% of Total Outflow']],
+          body: categorySummary.map((c) => [
+            c.name,
+            formatCurrency(c.amount),
+            `${totalExpenses > 0 ? ((c.amount / totalExpenses) * 100).toFixed(1) : 0}%`,
+          ]),
+          theme: 'striped',
+          headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold' },
+          columnStyles: {
+            1: { halign: 'right' },
+            2: { halign: 'right' },
+          },
+        });
+
+        const nextY = (doc as any).lastAutoTable.finalY + 24;
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(30, 41, 59);
+        doc.text('Recent Donations / Contributions', 36, nextY);
+
+        autoTable(doc, {
+          startY: nextY + 8,
+          margin: { left: 36, right: 36 },
+          head: [['Donor Name', 'Designation', 'Amount', 'Payment Mode', 'Date']],
+          body: filteredDonations.slice(0, 20).map((d) => [
+            d.donor_name,
+            d.designation || '—',
+            formatCurrency(d.amount),
+            d.payment_mode,
+            d.date ? formatDate(d.date) : '—',
+          ]),
+          theme: 'striped',
+          headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold' },
+          columnStyles: {
+            2: { halign: 'right' },
+          },
+        });
+      } else if (selectedReport === 'donations') {
+        autoTable(doc, {
+          startY: startY,
+          margin: { left: 36, right: 36 },
+          head: [['TXN ID', 'Date', 'Donor Name', 'Designation', 'Amount', 'Mode', 'Remarks']],
+          body: filteredDonations.map((d) => [
+            d.transaction_id,
+            d.date ? formatDate(d.date) : '',
+            d.donor_name,
+            d.designation || '—',
+            formatCurrency(d.amount),
+            d.payment_mode,
+            d.remarks || '—',
+          ]),
+          theme: 'striped',
+          headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold' },
+          columnStyles: {
+            4: { halign: 'right' },
+          },
+        });
+      } else if (selectedReport === 'expenses') {
+        autoTable(doc, {
+          startY: startY,
+          margin: { left: 36, right: 36 },
+          head: [['EXP ID', 'Date', 'Category', 'Description', 'Paid To / Vendor', 'Amount', 'Mode']],
+          body: filteredExpenses.map((e) => [
+            e.expense_id,
+            e.date ? formatDate(e.date) : '',
+            e.category_name || 'General',
+            e.description,
+            e.paid_to || '—',
+            formatCurrency(e.amount),
+            e.payment_mode,
+          ]),
+          theme: 'striped',
+          headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold' },
+          columnStyles: {
+            5: { halign: 'right' },
+          },
+        });
+      } else if (selectedReport === 'category_expenses') {
+        autoTable(doc, {
+          startY: startY,
+          margin: { left: 36, right: 36 },
+          head: [['Category Name', 'Total Amount Spent', '% of Outflow']],
+          body: categorySummary.map((c) => [
+            c.name,
+            formatCurrency(c.amount),
+            `${totalExpenses > 0 ? ((c.amount / totalExpenses) * 100).toFixed(1) : 0}%`,
+          ]),
+          theme: 'striped',
+          headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold' },
+          columnStyles: {
+            1: { halign: 'right' },
+            2: { halign: 'right' },
+          },
+        });
+      } else if (selectedReport === 'people_directory') {
+        autoTable(doc, {
+          startY: startY,
+          margin: { left: 36, right: 36 },
+          head: [['Person ID', 'Name', 'Designation', 'Phone', 'Expected Pledge']],
+          body: people.map((p) => [
+            p.person_id,
+            p.name,
+            p.designation || '—',
+            p.phone || '—',
+            formatCurrency(p.expected_donation || 0),
+          ]),
+          theme: 'striped',
+          headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold' },
+          columnStyles: {
+            4: { halign: 'right' },
+          },
+        });
       }
 
-      const fileName = `${fund?.name || 'Fund'}_${selectedReport}_${new Date().toISOString().slice(0, 10)}.pdf`;
-      pdf.save(fileName);
-    } catch (err) {
+      // Add page numbers and footer
+      const totalPages = (doc.internal as any).getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(148, 163, 184); // slate-400
+        doc.text(
+          `Page ${i} of ${totalPages}  ·  Generated via MultiFundManage Platform v1.2  ·  Made with ❤️ by A N I N D Y A`,
+          pageWidth / 2,
+          doc.internal.pageSize.getHeight() - 16,
+          { align: 'center' }
+        );
+      }
+
+      const fileName = `${(fund?.name || 'Fund').replace(/\s+/g, '_')}_${selectedReport}_v1.2.pdf`;
+      doc.save(fileName);
+    } catch (err: any) {
       console.error('PDF error:', err);
-      alert('Failed to generate PDF');
+      alert('Error generating PDF: ' + (err?.message || 'Unknown error'));
     } finally {
       setExporting(false);
+      setExportType(null);
     }
   }
 
-  // Download Image (PNG)
+  // Download Excel (.xlsx) via SheetJS
+  function downloadExcel() {
+    setExporting(true);
+    setExportType('excel');
+    try {
+      const wb = XLSX.utils.book_new();
+
+      // 1. Summary Sheet
+      const summaryData = [
+        ['MultiFundManage - Financial Report v1.2'],
+        ['Fund Name', fund?.name || ''],
+        ['Event Type', fund?.event_type || ''],
+        ['Fund ID', fund?.fund_id || ''],
+        ['Generated Date', new Date().toLocaleDateString()],
+        ['Period', startDate || endDate ? `${startDate || 'Start'} to ${endDate || 'Now'}` : 'Full Duration'],
+        [],
+        ['FINANCIAL OVERVIEW'],
+        ['Total Collections (INR)', totalDonations],
+        ['Total Expenses (INR)', totalExpenses],
+        ['Net Balance (INR)', netBalance],
+        ['Status', netBalance >= 0 ? 'Surplus' : 'Deficit'],
+        [],
+        ['CATEGORY EXPENSE BREAKDOWN'],
+        ['Category', 'Amount (INR)', '% of Expenses'],
+        ...categorySummary.map((c) => [
+          c.name,
+          c.amount,
+          totalExpenses > 0 ? Number(((c.amount / totalExpenses) * 100).toFixed(1)) : 0,
+        ]),
+      ];
+      const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+      XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+
+      // 2. Donations Sheet
+      const donationsData = [
+        ['Transaction ID', 'Date', 'Donor Name', 'Designation', 'Amount (INR)', 'Payment Mode', 'Remarks'],
+        ...filteredDonations.map((d) => [
+          d.transaction_id,
+          d.date || '',
+          d.donor_name,
+          d.designation || '',
+          d.amount,
+          d.payment_mode,
+          d.remarks || '',
+        ]),
+      ];
+      const wsDonations = XLSX.utils.aoa_to_sheet(donationsData);
+      XLSX.utils.book_append_sheet(wb, wsDonations, 'Donations');
+
+      // 3. Expenses Sheet
+      const expensesData = [
+        ['Expense ID', 'Date', 'Category', 'Description', 'Paid To / Vendor', 'Amount (INR)', 'Payment Mode'],
+        ...filteredExpenses.map((e) => [
+          e.expense_id,
+          e.date || '',
+          e.category_name || 'General',
+          e.description,
+          e.paid_to || '',
+          e.amount,
+          e.payment_mode,
+        ]),
+      ];
+      const wsExpenses = XLSX.utils.aoa_to_sheet(expensesData);
+      XLSX.utils.book_append_sheet(wb, wsExpenses, 'Expenses');
+
+      // 4. People Directory Sheet
+      const peopleData = [
+        ['Person ID', 'Name', 'Designation', 'Phone', 'Expected Pledge (INR)'],
+        ...people.map((p) => [
+          p.person_id,
+          p.name,
+          p.designation || '',
+          p.phone || '',
+          p.expected_donation || 0,
+        ]),
+      ];
+      const wsPeople = XLSX.utils.aoa_to_sheet(peopleData);
+      XLSX.utils.book_append_sheet(wb, wsPeople, 'Members');
+
+      const fileName = `${(fund?.name || 'Fund').replace(/\s+/g, '_')}_Financial_Statement_v1.2.xlsx`;
+      XLSX.writeFile(wb, fileName);
+    } catch (err: any) {
+      console.error('Excel export error:', err);
+      alert('Error exporting Excel: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setExporting(false);
+      setExportType(null);
+    }
+  }
+
+  // Download Image (PNG) via html-to-image (bypasses html2canvas oklch crash)
   async function downloadImage() {
     if (!printRef.current) return;
     setExporting(true);
+    setExportType('image');
     try {
-      const element = printRef.current;
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
+      const dataUrl = await toPng(printRef.current, {
         backgroundColor: '#ffffff',
+        pixelRatio: 2,
+        cacheBust: true,
       });
+
+      const fileName = `${(fund?.name || 'Fund').replace(/\s+/g, '_')}_${selectedReport}_v1.2.png`;
+
+      // Check if navigator.share with files is supported (mobile native share)
+      try {
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
+        const file = new File([blob], fileName, { type: 'image/png' });
+
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: `${fund?.name} Report`,
+            text: `Financial report for ${fund?.name}`,
+          });
+          setExporting(false);
+          setExportType(null);
+          return;
+        }
+      } catch (shareErr) {
+        // Fall back to link download
+      }
+
       const link = document.createElement('a');
-      link.download = `${fund?.name || 'Fund'}_${selectedReport}.png`;
-      link.href = canvas.toDataURL('image/png');
+      link.download = fileName;
+      link.href = dataUrl;
+      document.body.appendChild(link);
       link.click();
-    } catch (err) {
+      document.body.removeChild(link);
+    } catch (err: any) {
       console.error('Image export error:', err);
-      alert('Failed to export image');
+      alert('Error exporting image: ' + (err?.message || 'Unknown error'));
     } finally {
       setExporting(false);
+      setExportType(null);
     }
   }
 
@@ -217,7 +563,10 @@ export default function ReportsPage() {
 
           {(startDate || endDate) && (
             <button
-              onClick={() => { setStartDate(''); setEndDate(''); }}
+              onClick={() => {
+                setStartDate('');
+                setEndDate('');
+              }}
               className="mt-5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-secondary"
             >
               Clear Dates
@@ -226,27 +575,54 @@ export default function ReportsPage() {
         </div>
 
         {/* Export Buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Export PDF Button */}
           <button
             onClick={downloadPDF}
             disabled={exporting}
-            className="flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-md hover:bg-primary/90 disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-xl bg-primary px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-primary-foreground shadow-md transition-all hover:bg-primary/90 disabled:opacity-60"
           >
-            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-            Export PDF
+            {exporting && exportType === 'pdf' ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            <span>Export PDF</span>
           </button>
+
+          {/* Export Excel Button */}
+          <button
+            onClick={downloadExcel}
+            disabled={exporting}
+            className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-white shadow-md transition-all hover:bg-emerald-700 disabled:opacity-60"
+          >
+            {exporting && exportType === 'excel' ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileSpreadsheet className="h-4 w-4" />
+            )}
+            <span>Export Excel</span>
+          </button>
+
+          {/* Save Image Button */}
           <button
             onClick={downloadImage}
             disabled={exporting}
-            className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-secondary shadow-sm"
+            className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-foreground hover:bg-secondary shadow-sm disabled:opacity-60"
           >
-            <ImageIcon className="h-4 w-4 text-primary" />
-            Save Image
+            {exporting && exportType === 'image' ? (
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            ) : (
+              <ImageIcon className="h-4 w-4 text-primary" />
+            )}
+            <span>Save Image</span>
           </button>
+
+          {/* Print Button */}
           <button
             onClick={handlePrint}
             className="rounded-xl border border-border bg-card p-2.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
-            title="Print"
+            title="Print Statement"
           >
             <Printer className="h-4 w-4" />
           </button>
@@ -302,10 +678,16 @@ export default function ReportsPage() {
             </div>
             <div>
               <p className="text-xs uppercase tracking-wider text-slate-500">Closing Balance</p>
-              <p className={`text-xl font-bold ${netBalance >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>
+              <p
+                className={`text-xl font-bold ${
+                  netBalance >= 0 ? 'text-indigo-600' : 'text-rose-600'
+                }`}
+              >
                 {formatCurrency(netBalance)}
               </p>
-              <p className="text-xs text-slate-400">{netBalance >= 0 ? 'Net Surplus' : 'Net Deficit'}</p>
+              <p className="text-xs text-slate-400">
+                {netBalance >= 0 ? 'Net Surplus' : 'Net Deficit'}
+              </p>
             </div>
           </div>
 
@@ -329,9 +711,14 @@ export default function ReportsPage() {
                     {categorySummary.map((cat, i) => (
                       <tr key={i}>
                         <td className="py-2 px-3 font-medium text-slate-800">{cat.name}</td>
-                        <td className="py-2 px-3 text-right font-semibold text-slate-900">{formatCurrency(cat.amount)}</td>
+                        <td className="py-2 px-3 text-right font-semibold text-slate-900">
+                          {formatCurrency(cat.amount)}
+                        </td>
                         <td className="py-2 px-3 text-right text-slate-500">
-                          {totalExpenses > 0 ? ((cat.amount / totalExpenses) * 100).toFixed(1) : 0}%
+                          {totalExpenses > 0
+                            ? ((cat.amount / totalExpenses) * 100).toFixed(1)
+                            : 0}
+                          %
                         </td>
                       </tr>
                     ))}
@@ -358,7 +745,9 @@ export default function ReportsPage() {
                       <tr key={d.id}>
                         <td className="py-2 px-3 font-medium text-slate-800">{d.donor_name}</td>
                         <td className="py-2 px-3 text-slate-500">{d.designation || '—'}</td>
-                        <td className="py-2 px-3 text-right font-bold text-emerald-600">{formatCurrency(d.amount)}</td>
+                        <td className="py-2 px-3 text-right font-bold text-emerald-600">
+                          {formatCurrency(d.amount)}
+                        </td>
                         <td className="py-2 px-3 text-slate-500">{d.payment_mode}</td>
                       </tr>
                     ))}
@@ -388,13 +777,21 @@ export default function ReportsPage() {
                 <tbody className="divide-y divide-slate-200">
                   {filteredDonations.map((d) => (
                     <tr key={d.id}>
-                      <td className="py-2 px-2 font-mono text-[10px] text-slate-400">{d.transaction_id}</td>
-                      <td className="py-2 px-2 text-slate-600">{d.date ? formatDate(d.date) : ''}</td>
+                      <td className="py-2 px-2 font-mono text-[10px] text-slate-400">
+                        {d.transaction_id}
+                      </td>
+                      <td className="py-2 px-2 text-slate-600">
+                        {d.date ? formatDate(d.date) : ''}
+                      </td>
                       <td className="py-2 px-2 font-medium text-slate-900">{d.donor_name}</td>
                       <td className="py-2 px-2 text-slate-500">{d.designation || '—'}</td>
-                      <td className="py-2 px-2 text-right font-bold text-emerald-600">{formatCurrency(d.amount)}</td>
+                      <td className="py-2 px-2 text-right font-bold text-emerald-600">
+                        {formatCurrency(d.amount)}
+                      </td>
                       <td className="py-2 px-2 text-slate-500">{d.payment_mode}</td>
-                      <td className="py-2 px-2 text-slate-400 truncate max-w-[120px]">{d.remarks || '—'}</td>
+                      <td className="py-2 px-2 text-slate-400 truncate max-w-[120px]">
+                        {d.remarks || '—'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -422,13 +819,54 @@ export default function ReportsPage() {
                 <tbody className="divide-y divide-slate-200">
                   {filteredExpenses.map((e) => (
                     <tr key={e.id}>
-                      <td className="py-2 px-2 font-mono text-[10px] text-slate-400">{e.expense_id}</td>
-                      <td className="py-2 px-2 text-slate-600">{e.date ? formatDate(e.date) : ''}</td>
-                      <td className="py-2 px-2 font-medium text-slate-700">{e.category_name || 'General'}</td>
+                      <td className="py-2 px-2 font-mono text-[10px] text-slate-400">
+                        {e.expense_id}
+                      </td>
+                      <td className="py-2 px-2 text-slate-600">
+                        {e.date ? formatDate(e.date) : ''}
+                      </td>
+                      <td className="py-2 px-2 font-medium text-slate-700">
+                        {e.category_name || 'General'}
+                      </td>
                       <td className="py-2 px-2 text-slate-800">{e.description}</td>
                       <td className="py-2 px-2 text-slate-500">{e.paid_to || '—'}</td>
-                      <td className="py-2 px-2 text-right font-bold text-rose-600">{formatCurrency(e.amount)}</td>
+                      <td className="py-2 px-2 text-right font-bold text-rose-600">
+                        {formatCurrency(e.amount)}
+                      </td>
                       <td className="py-2 px-2 text-slate-500">{e.payment_mode}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {selectedReport === 'category_expenses' && (
+            <div>
+              <h3 className="mb-2 text-sm font-bold uppercase tracking-wider text-slate-700">
+                Category Expense Register
+              </h3>
+              <table className="w-full border-collapse text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-300 bg-slate-100 text-slate-600">
+                    <th className="py-2 px-3">Category Name</th>
+                    <th className="py-2 px-3 text-right">Total Spent</th>
+                    <th className="py-2 px-3 text-right">% of Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {categorySummary.map((c, i) => (
+                    <tr key={i}>
+                      <td className="py-2 px-3 font-medium text-slate-800">{c.name}</td>
+                      <td className="py-2 px-3 text-right font-bold text-slate-900">
+                        {formatCurrency(c.amount)}
+                      </td>
+                      <td className="py-2 px-3 text-right text-slate-500">
+                        {totalExpenses > 0
+                          ? ((c.amount / totalExpenses) * 100).toFixed(1)
+                          : 0}
+                        %
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -454,11 +892,15 @@ export default function ReportsPage() {
                 <tbody className="divide-y divide-slate-200">
                   {people.map((p) => (
                     <tr key={p.id}>
-                      <td className="py-2 px-3 font-mono text-[10px] text-slate-400">{p.person_id}</td>
+                      <td className="py-2 px-3 font-mono text-[10px] text-slate-400">
+                        {p.person_id}
+                      </td>
                       <td className="py-2 px-3 font-medium text-slate-900">{p.name}</td>
                       <td className="py-2 px-3 text-slate-500">{p.designation || '—'}</td>
                       <td className="py-2 px-3 text-slate-500">{p.phone || '—'}</td>
-                      <td className="py-2 px-3 text-right font-semibold text-indigo-600">{formatCurrency(p.expected_donation || 0)}</td>
+                      <td className="py-2 px-3 text-right font-semibold text-indigo-600">
+                        {formatCurrency(p.expected_donation || 0)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -470,7 +912,7 @@ export default function ReportsPage() {
           <div className="mt-12 border-t border-slate-200 pt-6">
             <div className="flex items-end justify-between text-xs text-slate-500">
               <div>
-                <p className="font-semibold text-slate-700">MultiFundManage Platform</p>
+                <p className="font-semibold text-slate-700">MultiFundManage Platform v1.2</p>
                 <p>Cloud Synchronized & Cryptographically Verified ID Tracking</p>
               </div>
               <div className="text-right">

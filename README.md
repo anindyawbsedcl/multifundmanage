@@ -1,10 +1,10 @@
-# 🏦 MultiFundManage — Version 1.0
+# 🏦 MultiFundManage — Version 1.2
 
-> **Next-Generation Cloud-Synced Multi-Event Fund & Financial Management Platform (Release v1.0.0)**  
+> **Next-Generation Cloud-Synced Multi-Event Fund & Financial Management Platform (Release v1.2.0)**  
 > *Built with Next.js 16 (App Router), React 19, Supabase (PostgreSQL + Auth + RLS), Tailwind CSS, Framer Motion, and Recharts.*  
 > *Crafted with ❤️ by A N I N D Y A.*
 
-[![Version](https://img.shields.io/badge/version-1.0.0-indigo.svg)](https://github.com/anindyawbsedcl/multifundmanage/releases/tag/v1.0.0)
+[![Version](https://img.shields.io/badge/version-1.2.0-indigo.svg)](https://github.com/anindyawbsedcl/multifundmanage)
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new)
 [![Next.js](https://img.shields.io/badge/Next.js-16.4-black?logo=next.js)](https://nextjs.org/)
