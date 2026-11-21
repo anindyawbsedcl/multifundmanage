@@ -64,18 +64,25 @@ export default function HomePage() {
   const supabase = createClient();
 
   useEffect(() => {
-    loadUser();
-    loadFunds();
+    async function checkAuthAndLoad() {
+      setLoading(true);
+      const {
+        data: { user: authUser },
+      } = await supabase.auth.getUser();
+
+      if (!authUser) {
+        window.location.href = '/login';
+        return;
+      }
+
+      setUser({ email: authUser.email || '', id: authUser.id });
+      loadFunds(authUser.id);
+    }
+
+    checkAuthAndLoad();
   }, [viewMode]);
 
-  async function loadUser() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user) setUser({ email: user.email || '', id: user.id });
-  }
-
-  async function loadFunds() {
+  async function loadFunds(userId?: string) {
     setLoading(true);
     const { data: fundsData, error } = await supabase
       .from('funds')
