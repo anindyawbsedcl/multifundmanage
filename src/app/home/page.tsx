@@ -226,7 +226,7 @@ export default function HomePage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="hidden sm:flex items-center gap-2">
+            <div className="hidden md:flex items-center gap-2">
               <PwaInstallButton className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm" />
               <ThemeToggle />
               <Link
@@ -245,14 +245,15 @@ export default function HomePage() {
               </button>
             </div>
 
-            {/* Mobile Hamburger */}
-            <div className="sm:hidden flex items-center gap-1">
-              <ThemeToggle />
+            {/* Mobile Hamburger Button */}
+            <div className="md:hidden flex items-center gap-2">
+              <PwaInstallButton className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm" />
               <button
                 onClick={() => setMenuOpen(!menuOpen)}
-                className="rounded-xl border border-border bg-secondary p-2 text-foreground"
+                className="rounded-xl border border-border bg-secondary p-2 text-foreground active:scale-95 transition-transform"
+                aria-label="Toggle navigation"
               >
-                {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                {menuOpen ? <X className="h-5 w-5 text-primary" /> : <Menu className="h-5 w-5 text-primary" />}
               </button>
             </div>
           </div>
@@ -265,20 +266,23 @@ export default function HomePage() {
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="sm:hidden border-t border-border px-4 py-3 bg-card space-y-3"
+              className="md:hidden border-t border-border px-4 py-3 bg-card space-y-3"
             >
-              <PwaInstallButton />
+              <div className="flex items-center justify-between py-1">
+                <span className="text-xs font-semibold text-muted-foreground">App Theme</span>
+                <ThemeToggle />
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 <Link
                   href="/settings"
                   onClick={() => setMenuOpen(false)}
-                  className="flex items-center justify-center gap-2 rounded-xl border border-border bg-secondary/50 py-2.5 text-xs font-semibold text-foreground"
+                  className="flex items-center justify-center gap-2 rounded-xl border border-border bg-secondary/60 py-2.5 text-xs font-semibold text-foreground hover:bg-secondary transition-colors"
                 >
                   <Settings className="h-4 w-4" /> Account
                 </Link>
                 <button
                   onClick={handleLogout}
-                  className="flex items-center justify-center gap-2 rounded-xl bg-red-50 py-2.5 text-xs font-semibold text-red-600 dark:bg-red-900/20 dark:text-red-400"
+                  className="flex items-center justify-center gap-2 rounded-xl bg-red-500/10 py-2.5 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-500/20 transition-colors"
                 >
                   <LogOut className="h-4 w-4" /> Sign Out
                 </button>

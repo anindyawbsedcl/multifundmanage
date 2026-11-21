@@ -6,34 +6,45 @@ export async function updateSession(request: NextRequest) {
     request,
   });
 
+  const pathname = request.nextUrl.pathname;
+
+  // Never block or redirect PWA assets and public share links
+  if (
+    pathname === '/manifest.json' ||
+    pathname === '/manifest.webmanifest' ||
+    pathname === '/sw.js' ||
+    pathname.startsWith('/icons/') ||
+    pathname.startsWith('/share/') ||
+    pathname.startsWith('/api/auth') ||
+    pathname.startsWith('/auth')
+  ) {
+    return supabaseResponse;
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
   const anonKey =
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     'placeholder-anon-key';
 
-  const supabase = createServerClient(
-    url,
-    anonKey,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          supabaseResponse = NextResponse.next({
-            request,
-          });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
-        },
+  const supabase = createServerClient(url, anonKey, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
       },
-    }
-  );
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) =>
+          request.cookies.set(name, value)
+        );
+        supabaseResponse = NextResponse.next({
+          request,
+        });
+        cookiesToSet.forEach(({ name, value, options }) =>
+          supabaseResponse.cookies.set(name, value, options)
+        );
+      },
+    },
+  });
 
   const {
     data: { user },
@@ -42,28 +53,26 @@ export async function updateSession(request: NextRequest) {
   // Protected routes - redirect to login if not authenticated
   if (
     !user &&
-    !request.nextUrl.pathname.startsWith('/login') &&
-    !request.nextUrl.pathname.startsWith('/auth') &&
-    !request.nextUrl.pathname.startsWith('/api/auth') &&
-    request.nextUrl.pathname !== '/'
+    !pathname.startsWith('/login') &&
+    pathname !== '/'
   ) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/login';
-    return NextResponse.redirect(url);
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = '/login';
+    return NextResponse.redirect(redirectUrl);
   }
 
   // Redirect logged-in users away from login page
-  if (user && request.nextUrl.pathname === '/login') {
-    const url = request.nextUrl.clone();
-    url.pathname = '/home';
-    return NextResponse.redirect(url);
+  if (user && pathname === '/login') {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = '/home';
+    return NextResponse.redirect(redirectUrl);
   }
 
   // Redirect root to home or login
-  if (request.nextUrl.pathname === '/') {
-    const url = request.nextUrl.clone();
-    url.pathname = user ? '/home' : '/login';
-    return NextResponse.redirect(url);
+  if (pathname === '/') {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = user ? '/home' : '/login';
+    return NextResponse.redirect(redirectUrl);
   }
 
   return supabaseResponse;

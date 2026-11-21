@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/shared/theme-provider";
 import { PwaRegistrar } from "@/components/shared/pwa-registrar";
@@ -13,6 +13,14 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
+
+export const viewport: Viewport = {
+  themeColor: "#6366f1",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
 
 export const metadata: Metadata = {
   title: "MultiFundManage — Multi-Event Fund Management",
@@ -39,6 +47,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <head>
         <meta name="theme-color" content="#6366f1" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="MultiFund" />
+        <meta name="application-name" content="MultiFund" />
         <link rel="manifest" href="/manifest.json" />
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
       </head>
